@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 
-const swapSchema = new mongoose.Schema(
-  {
+const swapSchema = new mongoose.Schema({
     requester: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -45,8 +44,8 @@ const swapSchema = new mongoose.Schema(
       max: [5, "Rating cannot exceed 5"],
     },
     feedback: {
-        type: String
-    }
+      type: String,
+    },
   },
   { timestamps: true }
 );
