@@ -1,6 +1,5 @@
 const User = require('../models/User');
 const Skill = require('../models/Skill');
-const Swap = require('../models/Swap');
 
 exports.viewMyProfile = async (req, res) => {
   try {
@@ -9,10 +8,7 @@ exports.viewMyProfile = async (req, res) => {
       .populate('skillsOffered skillsWanted', 'name description')
       .populate('friends', 'name profilePhoto email');
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     res.status(200).json({ success: true, data: user });
   } catch (err) {
     console.error(err.message);
@@ -23,14 +19,11 @@ exports.viewMyProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { name, gender, profilePhoto, availability, isPublic } = req.body;
-
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
       { name, gender, profilePhoto, availability, isPublic },
       { new: true, runValidators: true }
-    )
-      .select('-password')
-      .populate('skillsOffered skillsWanted', 'name description');
+    ).select('-password').populate('skillsOffered skillsWanted', 'name description');
 
     res.status(200).json({ success: true, data: updatedUser });
   } catch (err) {
@@ -41,21 +34,13 @@ exports.updateProfile = async (req, res) => {
 
 exports.viewAllFriends = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id)
-      .populate({
-        path: 'friends',
-        select: 'name profilePhoto email skillsOffered skillsWanted availability',
-        populate: {
-          path: 'skillsOffered skillsWanted',
-          select: 'name description'
-        }
-      });
-
-    res.status(200).json({ 
-      success: true, 
-      count: user.friends.length,
-      data: user.friends 
+    const user = await User.findById(req.user._id).populate({
+      path: 'friends',
+      select: 'name profilePhoto email skillsOffered skillsWanted availability',
+      populate: { path: 'skillsOffered skillsWanted', select: 'name description' }
     });
+
+    res.status(200).json({ success: true, count: user.friends.length, data: user.friends });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -65,40 +50,21 @@ exports.viewAllFriends = async (req, res) => {
 exports.sendFriendRequest = async (req, res) => {
   try {
     const recipientId = req.params.userId;
-
     const recipient = await User.findById(recipientId);
-    if (!recipient) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    if (req.user.friends.includes(recipientId)) {
-      return res.status(400).json({ success: false, error: 'Already friends' });
-    }
+    if (!recipient) return res.status(404).json({ success: false, error: 'User not found' });
+    if (req.user.friends.includes(recipientId)) return res.status(400).json({ success: false, error: 'Already friends' });
 
     const existingRequest = req.user.friendRequests.sent.find(
       request => request.to.equals(recipientId) && request.status === 'pending'
     );
-    
-    if (existingRequest) {
-      return res.status(400).json({ success: false, error: 'Request already sent' });
-    }
+    if (existingRequest) return res.status(400).json({ success: false, error: 'Request already sent' });
 
     await User.findByIdAndUpdate(req.user._id, {
-      $push: {
-        'friendRequests.sent': {
-          to: recipientId,
-          status: 'pending'
-        }
-      }
+      $push: { 'friendRequests.sent': { to: recipientId, status: 'pending' } }
     });
 
     await User.findByIdAndUpdate(recipientId, {
-      $push: {
-        'friendRequests.received': {
-          from: req.user._id,
-          status: 'pending'
-        }
-      }
+      $push: { 'friendRequests.received': { from: req.user._id, status: 'pending' } }
     });
 
     res.status(200).json({ success: true, message: 'Friend request sent' });
@@ -110,46 +76,33 @@ exports.sendFriendRequest = async (req, res) => {
 
 exports.respondToFriendRequest = async (req, res) => {
   try {
-    const { action } = req.body; // 'accept'  'reject'
+    const { action } = req.body;
     const requestId = req.params.requestId;
 
-    const user = await User.findOne({
-      _id: req.user._id,
-      'friendRequests.received._id': requestId
-    });
-
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'Request not found' });
+    if (!['accept', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, error: 'Invalid action' });
     }
 
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
     const request = user.friendRequests.received.id(requestId);
+    if (!request) return res.status(404).json({ success: false, error: 'Request not found' });
 
     request.status = action === 'accept' ? 'accepted' : 'rejected';
 
     if (action === 'accept') {
       user.friends.addToSet(request.from);
-      await User.findByIdAndUpdate(request.from, {
-        $addToSet: { friends: user._id }
-      });
+      await User.findByIdAndUpdate(request.from, { $addToSet: { friends: user._id } });
     }
 
     await User.updateOne(
-      { 
-        _id: request.from,
-        'friendRequests.sent.to': user._id 
-      },
-      { 
-        $set: { 
-          'friendRequests.sent.$.status': request.status 
-        } 
-      }
+      { _id: request.from, 'friendRequests.sent.to': user._id },
+      { $set: { 'friendRequests.sent.$.status': request.status } }
     );
 
     await user.save();
-    res.status(200).json({ 
-      success: true, 
-      message: `Friend request ${action}ed` 
-    });
+    res.status(200).json({ success: true, message: `Request ${action}ed`, data: request });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -162,11 +115,7 @@ exports.viewSentRequests = async (req, res) => {
       .populate('friendRequests.sent.to', 'name profilePhoto email')
       .select('friendRequests.sent');
 
-    res.status(200).json({ 
-      success: true, 
-      count: user.friendRequests.sent.length,
-      data: user.friendRequests.sent 
-    });
+    res.status(200).json({ success: true, count: user.friendRequests.sent.length, data: user.friendRequests.sent });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -179,11 +128,7 @@ exports.viewReceivedRequests = async (req, res) => {
       .populate('friendRequests.received.from', 'name profilePhoto email')
       .select('friendRequests.received');
 
-    res.status(200).json({ 
-      success: true, 
-      count: user.friendRequests.received.length,
-      data: user.friendRequests.received 
-    });
+    res.status(200).json({ success: true, count: user.friendRequests.received.length, data: user.friendRequests.received });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -193,19 +138,9 @@ exports.viewReceivedRequests = async (req, res) => {
 exports.removeFriend = async (req, res) => {
   try {
     const friendId = req.params.friendId;
-
-    await User.findByIdAndUpdate(req.user._id, {
-      $pull: { friends: friendId }
-    });
-
-    await User.findByIdAndUpdate(friendId, {
-      $pull: { friends: req.user._id }
-    });
-
-    res.status(200).json({ 
-      success: true, 
-      message: 'Friend removed successfully' 
-    });
+    await User.findByIdAndUpdate(req.user._id, { $pull: { friends: friendId } });
+    await User.findByIdAndUpdate(friendId, { $pull: { friends: req.user._id } });
+    res.status(200).json({ success: true, message: 'Friend removed' });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -225,23 +160,13 @@ exports.viewMyFriends = async (req, res) => {
       })
       .select('friends');
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    res.status(200).json({
-      success: true,
-      count: user.friends.length,
-      data: user.friends
-    });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    res.status(200).json({ success: true, count: user.friends.length, data: user.friends });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
   }
 };
-
-//  ADMIN CONTROLLERS  //
-
 
 exports.banUser = async (req, res) => {
   try {
@@ -251,15 +176,8 @@ exports.banUser = async (req, res) => {
       { new: true }
     ).select('-password');
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    res.status(200).json({ 
-      success: true, 
-      message: 'User banned successfully',
-      data: user 
-    });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    res.status(200).json({ success: true, message: 'User banned', data: user });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -274,15 +192,8 @@ exports.unbanUser = async (req, res) => {
       { new: true }
     ).select('-password');
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
-
-    res.status(200).json({ 
-      success: true, 
-      message: 'User unbanned successfully',
-      data: user 
-    });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    res.status(200).json({ success: true, message: 'User unbanned', data: user });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -297,15 +208,8 @@ exports.approveSkill = async (req, res) => {
       { new: true }
     );
 
-    if (!skill) {
-      return res.status(404).json({ success: false, error: 'Skill not found' });
-    }
-
-    res.status(200).json({ 
-      success: true, 
-      message: 'Skill approved',
-      data: skill 
-    });
+    if (!skill) return res.status(404).json({ success: false, error: 'Skill not found' });
+    res.status(200).json({ success: true, message: 'Skill approved', data: skill });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -320,15 +224,8 @@ exports.rejectSkill = async (req, res) => {
       { new: true }
     );
 
-    if (!skill) {
-      return res.status(404).json({ success: false, error: 'Skill not found' });
-    }
-
-    res.status(200).json({ 
-      success: true, 
-      message: 'Skill rejected',
-      data: skill 
-    });
+    if (!skill) return res.status(404).json({ success: false, error: 'Skill not found' });
+    res.status(200).json({ success: true, message: 'Skill rejected', data: skill });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, error: 'Server error' });
