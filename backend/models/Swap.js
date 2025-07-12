@@ -4,47 +4,51 @@ const swapSchema = new mongoose.Schema({
     requester: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: [true, "Requester is required"],
+      required: true,
     },
     recipient: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: [true, "Recipient is required"],
+      required: true,
     },
     offeredSkill: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Skill",
-      required: [true, "Offered skill is required"],
+      required: true,
     },
     requestedSkill: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Skill",
-      required: [true, "Requested skill is required"],
+      required: true,
     },
     status: {
       type: String,
-      enum: {
-        values: ["pending", "accepted", "rejected", "completed"],
-        message: "Invalid swap status",
-      },
+      enum: ["pending", "accepted", "rejected", "completed"],
       default: "pending",
-      index: true,
     },
-    proposedTime: {
-      type: Date,
+    requesterRating: {
+      rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
+      feedback: String,
+      givenAt: {
+        type: Date,
+        default: Date.now,
+      },
     },
-    message: {
-      type: String,
-      maxlength: [500, "Message cannot exceed 500 characters"],
-    },
-    rating: {
-      type: Number,
-      default: 0,
-      min: [0, "Rating must be at least 0"],
-      max: [5, "Rating cannot exceed 5"],
-    },
-    feedback: {
-      type: String,
+    recipientRating: {
+      rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
+      feedback: String,
+      givenAt: {
+        type: Date,
+        default: Date.now,
+      },
     },
   },
   { timestamps: true }

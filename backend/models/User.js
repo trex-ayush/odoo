@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema(
       minlength: [6, "Password must be at least 6 characters"],
       select: false,
     },
+    gender: {
+      type: String,
+      enum: ["male", "female", "prefer not to say"],
+      default: "prefer not to say",
+    },
     profilePhoto: {
       type: String,
       default: "",
@@ -61,7 +66,13 @@ const userSchema = new mongoose.Schema(
     isAdmin: {
       type: Boolean,
       default: false,
-    }
+    },
+    friends: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );
