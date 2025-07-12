@@ -4,11 +4,11 @@ const jwt = require("jsonwebtoken");
 
 exports.signup = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, adminKey } = req.body;
 
         // Validate input
         if (!name || !email || !password) {
-            return res.status(400).json({ message: "All fields are required" });
+            return res.status(400).json({ message: "Name, email, and password are required" });
         }
 
         const existingUser = await User.findOne({ email });
@@ -19,25 +19,44 @@ exports.signup = async (req, res) => {
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        const isAdmin = adminKey && adminKey === process.env.ADMIN_SECRET_KEY;
+
         // Create user
         const newUser = await User.create({
             name,
             email,
-            password: hashedPassword
+            password: hashedPassword,
+            isAdmin: isAdmin || false
+        });
+
+        const token = jwt.sign(
+            { id: newUser._id, isAdmin: newUser.isAdmin },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" }
+        );
+
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 3600000
         });
 
         return res.status(201).json({
             success: true,
-            message: "User registered successfully",
-            userId: newUser._id
+            message: `User registered successfully${isAdmin ? ' as admin' : ''}`,
+            user: {
+                id: newUser._id,
+                name: newUser.name,
+                email: newUser.email,
+                isAdmin: newUser.isAdmin
+            }
         });
     } catch (err) {
         return res.status(500).json({ message: "Signup failed", error: err.message });
     }
 };
 
-
-// LOGIN
 exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -46,18 +65,18 @@ exports.login = async (req, res) => {
             return res.status(400).json({ message: "Email and password are required" });
         }
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email }).select("+password");
         if (!user) {
-            return res.status(401).json({ message: "Invalid Credentials" });
+            return res.status(401).json({ message: "Invalid credentials" });
         }
 
         const isPasswordMatch = await bcrypt.compare(password, user.password);
         if (!isPasswordMatch) {
-            return res.status(401).json({ message: "Invalid Credentials" });
+            return res.status(401).json({ message: "Invalid credentials" });
         }
 
         const token = jwt.sign(
-            { id: user._id },
+            { id: user._id, isAdmin: user.isAdmin },
             process.env.JWT_SECRET,
             { expiresIn: "1h" }
         );
@@ -74,17 +93,15 @@ exports.login = async (req, res) => {
             message: "Login successful",
             user: {
                 id: user._id,
-                username: user.username,
-                email: user.email
+                name: user.name,
+                email: user.email,
+                isAdmin: user.isAdmin
             }
         });
     } catch (err) {
         return res.status(500).json({ message: "Login failed", error: err.message });
     }
 };
-
-
-//logout
 
 exports.logout = async (req, res) => {
     try {
