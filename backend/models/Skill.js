@@ -4,28 +4,29 @@ const skillSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, "Please provide a skill name"],
+      required: true,
       unique: true,
       trim: true,
-      maxlength: [50, "Skill name cannot exceed 50 characters"],
+      maxlength: 50,
       index: true,
-      
     },
     description: {
       type: String,
-      required: [true, "Please provide a description"],
+      required: true,
       trim: true,
-      maxlength: [500, "Description cannot exceed 500 characters"],
+      maxlength: 500,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+    isApproved: {
+      type: Boolean,
+      default: false,
+    },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model("Skill", skillSchema);
