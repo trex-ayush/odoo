@@ -7,7 +7,7 @@ const {
   respondToSwap,
   submitRating,
   completeSwap
-} = require('../controllers/swaps');
+} = require('../controller/swaps');
 
 router.post('/', protect, createSwap);
 router.get('/', protect, getMySwaps);
