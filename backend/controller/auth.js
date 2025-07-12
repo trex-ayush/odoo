@@ -4,15 +4,11 @@ const jwt = require("jsonwebtoken");
 
 exports.signup = async (req, res) => {
     try {
-        const { username, email, password, confirmPassword } = req.body;
+        const { name, email, password } = req.body;
 
         // Validate input
-        if (!username || !email || !password || !confirmPassword) {
+        if (!name || !email || !password) {
             return res.status(400).json({ message: "All fields are required" });
-        }
-
-        if (password !== confirmPassword) {
-            return res.status(400).json({ message: "Passwords do not match" });
         }
 
         const existingUser = await User.findOne({ email });
@@ -25,7 +21,7 @@ exports.signup = async (req, res) => {
 
         // Create user
         const newUser = await User.create({
-            username,
+            name,
             email,
             password: hashedPassword
         });
